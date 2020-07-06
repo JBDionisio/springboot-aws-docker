@@ -6,6 +6,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.dionisio.beerstore.error.ErrorResponse.APIError;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,21 +36,31 @@ public class APIExceptionHandler {
             Locale locale) {
 
         Stream<ObjectError> errors = exception.getBindingResult().getAllErrors().stream();
-        
+
         List<APIError> apiErrors = errors
-            .map(ObjectError::getDefaultMessage)
-            .map(code -> toAPIError(code, locale))
-            .collect(Collectors.toList());
-        
+                .map(ObjectError::getDefaultMessage)
+                .map(code -> toAPIError(code, locale))
+                .collect(Collectors.toList());
+
         ErrorResponse errorResponse = ErrorResponse.of(HttpStatus.BAD_REQUEST, apiErrors);
 
         return ResponseEntity.badRequest().body(errorResponse);
     }
 
-    private APIError toAPIError(String code, Locale locale) {
+    @ExceptionHandler(InvalidFormatException.class)
+    public ResponseEntity<ErrorResponse> handlerInvalidFormatException(InvalidFormatException exception,
+            Locale locale) {
+        final String errorCode = "generic-1";
+        final HttpStatus status = HttpStatus.BAD_REQUEST;
+        final ErrorResponse errorResponse = ErrorResponse.of(status, toAPIError(errorCode, locale, exception.getValue()));
+
+        return ResponseEntity.badRequest().body(errorResponse);
+    }
+
+    private APIError toAPIError(String code, Locale locale, Object... args) {
         String message;
         try {
-            message = apiErrorMessageSource.getMessage(code, null, locale);
+            message = apiErrorMessageSource.getMessage(code, args, locale);
         } catch (NoSuchMessageException e) {
             LOG.error("Could not find any message for {} code under {} locale", code, locale);
             message = NO_MESSAGE_AVAILABLE;
